@@ -37,6 +37,7 @@ def load_data():
     bins = [0, 30, 50, 70, df['age'].max() + 1]
     labels = ['<30', '30-50', '50-70', '70+']
     df['age_group'] = pd.cut(df['age'], bins=bins, labels=labels, right=False)
+    
     return df
 
 # Load the data
@@ -68,10 +69,14 @@ if df is not None:
         st.subheader("CKD Prevalence by Age")
         age_prev = df.groupby('age_group')['class'].mean().mul(100)
         fig, ax = plt.subplots(figsize=(6, 5))
-        sns.barplot(x=age_prev.index, y=age_prev.values, palette='Blues_d', ax=ax)
+        bars = sns.barplot(x=age_prev.index, y=age_prev.values, palette='Blues_d', ax=ax)
         ax.set_ylabel('Prevalence (%)')
         ax.set_xlabel('Age Group')
         ax.set_ylim(0, 100)
+        # Add data labels
+        for bar in bars.patches:
+            ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height(), f'{bar.get_height():.1f}%', 
+                    ha='center', va='bottom', fontsize=10)
         plt.tight_layout()
         st.pyplot(fig, use_container_width=True)
 
@@ -88,11 +93,14 @@ if df is not None:
         
         odds_df = pd.DataFrame(or_list).set_index('Risk Factor').sort_values(by='Odds Ratio')
         fig, ax = plt.subplots(figsize=(6, 5))
-        sns.barplot(x=odds_df['Odds Ratio'], y=odds_df.index, palette='OrRd', ax=ax)
+        bars = sns.barplot(x=odds_df['Odds Ratio'], y=odds_df.index, palette='OrRd', ax=ax)
         ax.set_xlabel("Odds Ratio (Log Scale)")
         ax.set_ylabel("")
         ax.axvline(1, color='black', linestyle='--')
         ax.set_xscale('log')
+        # Add data labels
+        for i, v in enumerate(odds_df['Odds Ratio']):
+            ax.text(v, i, f' {v:.2f}', va='center', ha='left', fontweight='bold')
         plt.tight_layout()
         st.pyplot(fig, use_container_width=True)
 
@@ -157,31 +165,32 @@ if df is not None:
 
     with tab2:
         st.subheader("Correlations Between Top Clinical Variables")
+        # --- Create and filter the correlation DataFrame ---
         numeric_df = df.select_dtypes(include=np.number)
         correlation_matrix = numeric_df.corr()
-        
         corr_pairs = correlation_matrix.unstack().reset_index()
-        corr_pairs.columns = ['Var1', 'Var2', 'Corr']
-        corr_pairs = corr_pairs[corr_pairs['Var1'] != corr_pairs['Var2']]
-        corr_pairs['key'] = corr_pairs.apply(lambda r: tuple(sorted((r['Var1'], r['Var2']))), axis=1)
-        corr_pairs = corr_pairs.drop_duplicates(subset='key').drop(columns='key')
-        corr_pairs['Abs_Corr'] = corr_pairs['Corr'].abs()
-        sig_pairs = corr_pairs.sort_values(by='Abs_Corr', ascending=False).head(10)
-        
+        corr_pairs.columns = ['Variable 1', 'Variable 2', 'Correlation']
+        corr_pairs = corr_pairs[corr_pairs['Variable 1'] != corr_pairs['Variable 2']]
+        corr_pairs['pair_key'] = corr_pairs.apply(lambda row: tuple(sorted((row['Variable 1'], row['Variable 2']))), axis=1)
+        corr_pairs = corr_pairs.drop_duplicates(subset='pair_key').drop(columns='pair_key')
+        corr_pairs['Abs_Correlation'] = corr_pairs['Correlation'].abs()
+        significant_pairs = corr_pairs.sort_values(by='Abs_Correlation', ascending=False).head(10)
+
+        # --- Display the table and focused heatmap ---
         col_table, col_heatmap = st.columns([1, 2])
         
         with col_table:
             st.write("Top 10 Correlated Pairs:")
-            st.dataframe(sig_pairs[['Var1', 'Var2', 'Corr']].style.background_gradient(cmap='coolwarm', axis=0, subset='Corr'))
+            st.dataframe(significant_pairs[['Variable 1', 'Variable 2', 'Correlation']].style.background_gradient(cmap='coolwarm', axis=0, subset='Correlation'))
 
         with col_heatmap:
-            top_vars = pd.unique(sig_pairs[['Var1', 'Var2']].values.ravel('K'))
+            top_vars = pd.unique(significant_pairs[['Variable 1', 'Variable 2']].values.ravel('K'))
             top_corr_matrix = correlation_matrix.loc[top_vars, top_vars]
             
-            fig, ax = plt.subplots(figsize=(7, 5))
-            sns.heatmap(top_corr_matrix, annot=True, cmap='coolwarm', fmt=".2f", linewidths=0.5, square=True, ax=ax)
-            ax.set_title("Heatmap of Strongest Correlations", fontsize=14)
-            st.pyplot(fig, use_container_width=True)
+            fig_corr, ax_corr = plt.subplots(figsize=(7, 5))
+            sns.heatmap(top_corr_matrix, annot=True, cmap='coolwarm', fmt=".2f", linewidths=0.5, square=True, ax=ax_corr)
+            ax_corr.set_title("Heatmap of Strongest Correlations", fontsize=14)
+            st.pyplot(fig_corr, use_container_width=True)
             
     with tab3:
         st.subheader("Explore the Full Cleaned Dataset")
