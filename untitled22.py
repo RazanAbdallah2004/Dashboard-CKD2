@@ -7,7 +7,6 @@ Original file is located at
     https://colab.research.google.com/drive/16c0bskb_oHi3LxWTmRX9_njLKxa5Zkt3
 """
 
-
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -38,7 +37,7 @@ def load_data():
     bins = [0, 30, 50, 70, df['age'].max() + 1]
     labels = ['<30', '30-50', '50-70', '70+']
     df['age_group'] = pd.cut(df['age'], bins=bins, labels=labels, right=False)
-
+    
     return df
 
 # Load the data
@@ -69,17 +68,18 @@ if df is not None:
     with colA:
         st.subheader("CKD Prevalence by Age")
         age_prev = df.groupby('age_group')['class'].mean().mul(100)
-        fig, ax = plt.subplots(figsize=(6, 5))
+        # --- ADJUSTED FIGSIZE ---
+        fig, ax = plt.subplots(figsize=(5, 4)) 
         bars = sns.barplot(x=age_prev.index, y=age_prev.values, palette='Blues_d', ax=ax)
         ax.set_ylabel('Prevalence (%)')
         ax.set_xlabel('Age Group')
         ax.set_ylim(0, 100)
-
-        # --- THIS IS THE ADDED CODE FOR LABELS ---
+        
+        # --- ANNOTATIONS WITH ADJUSTED FONTSIZE ---
         for bar in bars.patches:
-            ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height(), f'{bar.get_height():.1f}%',
-                    ha='center', va='bottom', fontsize=10, fontweight='bold')
-
+            ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height(), f'{bar.get_height():.1f}%', 
+                    ha='center', va='bottom', fontsize=9, fontweight='bold')
+        
         plt.tight_layout()
         st.pyplot(fig, use_container_width=True)
 
@@ -93,17 +93,18 @@ if df is not None:
             a, b, c, d = cont_table.loc[1, 1], cont_table.loc[1, 0], cont_table.loc[0, 1], cont_table.loc[0, 0]
             odds_ratio = (a * d) / (b * c)
             or_list.append({'Risk Factor': var.replace('_', ' ').title(), 'Odds Ratio': odds_ratio})
-
+        
         odds_df = pd.DataFrame(or_list).set_index('Risk Factor').sort_values(by='Odds Ratio')
-        fig, ax = plt.subplots(figsize=(6, 5))
+        # --- ADJUSTED FIGSIZE ---
+        fig, ax = plt.subplots(figsize=(5, 4))
         bars = sns.barplot(x=odds_df['Odds Ratio'], y=odds_df.index, palette='OrRd', ax=ax)
         ax.set_xlabel("Odds Ratio (Log Scale)")
         ax.set_ylabel("")
         ax.axvline(1, color='black', linestyle='--')
         ax.set_xscale('log')
-        # --- THIS IS THE ADDED CODE FOR LABELS ---
+        # --- ANNOTATIONS WITH ADJUSTED FONTSIZE ---
         for i, v in enumerate(odds_df['Odds Ratio']):
-            ax.text(v, i, f' {v:.2f}', va='center', ha='left', fontweight='bold')
+            ax.text(v, i, f' {v:.2f}', va='center', ha='left', fontweight='bold', fontsize=9)
         plt.tight_layout()
         st.pyplot(fig, use_container_width=True)
 
@@ -119,10 +120,11 @@ if df is not None:
         incidence_data = []
         for lab, cond in abnormal_defs.items():
             incidence_data.append([cond[df['class']==0].mean()*100, cond[df['class']==1].mean()*100])
-
+        
         incidence_df = pd.DataFrame(incidence_data, index=abnormal_defs.keys(), columns=['Non-CKD', 'CKD'])
-        fig, ax = plt.subplots(figsize=(6, 5))
-        sns.heatmap(incidence_df, annot=True, fmt=".1f", cmap='coolwarm', linewidths=0.5, ax=ax, cbar=False)
+        # --- ADJUSTED FIGSIZE ---
+        fig, ax = plt.subplots(figsize=(5, 4))
+        sns.heatmap(incidence_df, annot=True, fmt=".1f", cmap='coolwarm', linewidths=0.5, ax=ax, cbar=False, annot_kws={"size": 10})
         ax.set_ylabel("Abnormal Finding")
         plt.tight_layout()
         st.pyplot(fig, use_container_width=True)
@@ -136,7 +138,7 @@ if df is not None:
     with tab1:
         st.subheader("Compare Clinical Indicators by CKD Status")
         col_select, col_plot = st.columns([1, 2])
-
+        
         with col_select:
             lab_options = {
                 "Serum Creatinine": "serum_creatinine",
@@ -148,7 +150,7 @@ if df is not None:
             }
             selected_lab1 = st.selectbox("Choose Lab Value 1:", options=list(lab_options.keys()), index=0)
             selected_lab2 = st.selectbox("Choose Lab Value 2:", options=list(lab_options.keys()), index=1)
-
+        
         with col_plot:
             fig, ax = plt.subplots(1, 2, figsize=(10, 4))
             sns.boxplot(x='class', y=lab_options[selected_lab1], data=df, ax=ax[0], palette="coolwarm")
@@ -181,7 +183,7 @@ if df is not None:
 
         # --- Display the table and focused heatmap ---
         col_table, col_heatmap = st.columns([1, 2])
-
+        
         with col_table:
             st.write("Top 10 Correlated Pairs:")
             st.dataframe(significant_pairs[['Variable 1', 'Variable 2', 'Correlation']].style.background_gradient(cmap='coolwarm', axis=0, subset='Correlation'))
@@ -190,17 +192,17 @@ if df is not None:
             # Extract variables and create the matrix for the heatmap
             top_vars = pd.unique(significant_pairs[['Variable 1', 'Variable 2']].values.ravel('K'))
             top_corr_matrix = correlation_matrix.loc[top_vars, top_vars]
-
+            
             # Create a mask to hide the redundant upper triangle
             mask = np.triu(np.ones_like(top_corr_matrix, dtype=bool))
-
+            
             # Plot the heatmap
             fig_corr, ax_corr = plt.subplots(figsize=(8, 6))
-            sns.heatmap(top_corr_matrix, annot=True, cmap='coolwarm', fmt=".2f", linewidths=0.5,
+            sns.heatmap(top_corr_matrix, annot=True, cmap='coolwarm', fmt=".2f", linewidths=0.5, 
                         mask=mask, ax=ax_corr)
             ax_corr.set_title("Heatmap of Strongest Correlations", fontsize=14)
             st.pyplot(fig_corr, use_container_width=True)
-
+            
     with tab3:
         st.subheader("Explore the Full Cleaned Dataset")
         st.dataframe(df.drop(columns=['age_group']))
