@@ -25,25 +25,18 @@ st.set_page_config(
 def load_data():
     """
     Loads and preprocesses the cleaned CKD dataset.
-    - Loads data from 'cleaned_kidney_disease.csv'
-    - Maps the target 'class' variable to numerical format (1 for CKD, 0 for Non-CKD)
-    - Creates age groups for prevalence analysis
     """
     try:
         df = pd.read_csv("cleaned_kidney_disease.csv")
     except FileNotFoundError:
         st.error("Error: 'cleaned_kidney_disease.csv' not found.")
-        st.info("Please ensure you have run the Ckd_healthcare.ipynb notebook to generate the cleaned data file and that it's in the same directory as this script.")
+        st.info("Please ensure 'cleaned_kidney_disease.csv' is in the same directory as this script.")
         return None
 
-    # Map target variable for calculations
     df['class'] = df['class'].map({'Chronic Kidney Disease': 1, 'Not Chronic Kidney Disease': 0})
-
-    # Create age groups for prevalence analysis
     bins = [0, 30, 50, 70, df['age'].max() + 1]
     labels = ['<30', '30-50', '50-70', '70+']
     df['age_group'] = pd.cut(df['age'], bins=bins, labels=labels, right=False)
-
     return df
 
 # Load the data
@@ -52,12 +45,10 @@ df = load_data()
 # --- 3. MAIN DASHBOARD ---
 if df is not None:
     st.title("🩺 Chronic Kidney Disease (CKD) Analytics Dashboard")
-    st.markdown("An interactive dashboard to explore clinical data, risk factors, and prevalence related to CKD.")
+    st.markdown("A high-level overview of key CKD metrics, risk factors, and clinical findings.")
 
     # --- 4. KPIs & HIGH-LEVEL METRICS ---
-    st.divider()
     st.header("Overall Snapshot")
-
     total_patients = len(df)
     ckd_patients = df['class'].sum()
     prevalence = (ckd_patients / total_patients) * 100
@@ -68,145 +59,130 @@ if df is not None:
     col3.metric("Overall CKD Prevalence", f"{prevalence:.1f}%")
     st.divider()
 
-    # --- 5. PREVALENCE & RISK FACTOR ANALYSIS ---
-    st.header("Prevalence and Risk Factor Insights")
-    col1, col2 = st.columns(2)
+    # --- 5. HORIZONTAL LAYOUT FOR CORE VISUALIZATIONS ---
+    st.header("Key Healthcare Metrics at a Glance")
+    colA, colB, colC = st.columns(3)
 
     # --- Prevalence by Age Group ---
-    with col1:
-        st.subheader("CKD Prevalence by Age Group")
-        age_prev = df.groupby('age_group')['class'].mean().mul(100).rename('Prevalence (%)')
-
-        fig, ax = plt.subplots()
+    with colA:
+        st.subheader("CKD Prevalence by Age")
+        age_prev = df.groupby('age_group')['class'].mean().mul(100)
+        fig, ax = plt.subplots(figsize=(6, 5))
         sns.barplot(x=age_prev.index, y=age_prev.values, palette='Blues_d', ax=ax)
-        ax.set_title('CKD Prevalence by Age Group')
         ax.set_ylabel('Prevalence (%)')
         ax.set_xlabel('Age Group')
         ax.set_ylim(0, 100)
-        # Add data labels
-        for i, v in enumerate(age_prev):
-            ax.text(i, v + 2, f"{v:.1f}%", ha='center', fontweight='bold')
-        st.pyplot(fig)
+        plt.tight_layout()
+        st.pyplot(fig, use_container_width=True)
 
     # --- Odds Ratios of Key Risk Factors ---
-    with col2:
-        st.subheader("Odds Ratios of Key Comorbidities")
+    with colB:
+        st.subheader("Key Comorbidity Risks")
         categorical_vars = ['hypertension', 'diabetes_mellitus', 'coronary_artery_disease', 'anemia']
         or_list = []
         for var in categorical_vars:
-            cont_table = pd.crosstab(df[var], df['class']) + 0.5  # Haldane-Anscombe correction
+            cont_table = pd.crosstab(df[var], df['class']) + 0.5
             a, b, c, d = cont_table.loc[1, 1], cont_table.loc[1, 0], cont_table.loc[0, 1], cont_table.loc[0, 0]
             odds_ratio = (a * d) / (b * c)
             or_list.append({'Risk Factor': var.replace('_', ' ').title(), 'Odds Ratio': odds_ratio})
-
+        
         odds_df = pd.DataFrame(or_list).set_index('Risk Factor').sort_values(by='Odds Ratio')
-
-        fig, ax = plt.subplots()
+        fig, ax = plt.subplots(figsize=(6, 5))
         sns.barplot(x=odds_df['Odds Ratio'], y=odds_df.index, palette='OrRd', ax=ax)
-        ax.set_title('Odds Ratios for CKD Risk Factors')
-        ax.set_xlabel("Odds Ratio (Log Scale) - Likelihood of CKD")
-        ax.set_ylabel("Risk Factor")
+        ax.set_xlabel("Odds Ratio (Log Scale)")
+        ax.set_ylabel("")
         ax.axvline(1, color='black', linestyle='--')
-        ax.set_xscale('log') # Use log scale for better visualization
-        st.pyplot(fig)
-        st.caption("An Odds Ratio > 1 indicates an increased likelihood of CKD if the risk factor is present.")
-
-    st.divider()
-
-    # --- 6. INTERACTIVE CLINICAL INDICATOR ANALYSIS ---
-    st.header("Interactive Clinical Indicator Explorer")
-    col1, col2 = st.columns([1, 2])
-
-    # --- User Selection for Plots ---
-    with col1:
-        st.subheader("Select Indicators to Compare")
-
-        # Clinical lab values
-        lab_options = {
-            "Serum Creatinine": "serum_creatinine",
-            "Hemoglobin": "hemoglobin",
-            "Blood Glucose": "blood_glucose_random",
-            "Blood Urea": "blood_urea",
-            "Sodium": "sodium",
-            "Potassium": "potassium"
-        }
-        selected_lab = st.selectbox("Choose a Lab Value:", options=list(lab_options.keys()))
-
-        # Abnormal findings (urinalysis)
-        abnormal_options = {
-            "Albumin in Urine": "albumin",
-            "Sugar in Urine": "sugar",
-            "Red Blood Cells": "red_blood_cells",
-            "Pus Cells": "pus_cell"
-        }
-        selected_finding = st.selectbox("Choose a Urinalysis Finding:", options=list(abnormal_options.keys()))
-
-    # --- Dynamic Plots based on Selection ---
-    with col2:
-        # Box Plot for selected lab value
-        fig, ax = plt.subplots(1, 2, figsize=(12, 5))
-        sns.boxplot(x='class', y=lab_options[selected_lab], data=df, ax=ax[0], palette="coolwarm")
-        ax[0].set_title(f"{selected_lab} by CKD Status", fontsize=14)
-        ax[0].set_xticklabels(['Non-CKD', 'CKD'])
-        ax[0].set_xlabel("")
-
-        # Incidence plot for selected finding
-        finding_key = abnormal_options[selected_finding]
-        if finding_key in ['red_blood_cells', 'pus_cell']: # These are binary (0=abnormal, 1=normal)
-            cond = df[finding_key] == 0
-        else: # These are counts (abnormal if > 0)
-            cond = df[finding_key] > 0
-
-        incidence_data = [
-            cond[df['class']==0].mean() * 100,
-            cond[df['class']==1].mean() * 100
-        ]
-
-        sns.barplot(x=['Non-CKD', 'CKD'], y=incidence_data, palette='viridis', ax=ax[1])
-        ax[1].set_title(f"Incidence of Abnormal {selected_finding}", fontsize=14)
-        ax[1].set_ylabel("Incidence (%)")
-        ax[1].set_ylim(0, 100)
-        for i, v in enumerate(incidence_data):
-            ax[1].text(i, v + 2, f"{v:.1f}%", ha='center', fontweight='bold')
-
+        ax.set_xscale('log')
         plt.tight_layout()
-        st.pyplot(fig)
+        st.pyplot(fig, use_container_width=True)
 
-    # --- 7. CORRELATION ANALYSIS & DATA EXPLORER ---
+    # --- Incidence of Abnormal Lab Findings ---
+    with colC:
+        st.subheader("Incidence of Abnormal Findings")
+        abnormal_defs = {
+            'Albumin > 0': df['albumin'] > 0,
+            'Pus Cells Abn.': df['pus_cell'] == 0,
+            'RBCs Abn.': df['red_blood_cells'] == 0,
+            'Sugar > 0': df['sugar'] > 0
+        }
+        incidence_data = []
+        for lab, cond in abnormal_defs.items():
+            incidence_data.append([cond[df['class']==0].mean()*100, cond[df['class']==1].mean()*100])
+        
+        incidence_df = pd.DataFrame(incidence_data, index=abnormal_defs.keys(), columns=['Non-CKD', 'CKD'])
+        fig, ax = plt.subplots(figsize=(6, 5))
+        sns.heatmap(incidence_df, annot=True, fmt=".1f", cmap='coolwarm', linewidths=0.5, ax=ax, cbar=False)
+        ax.set_ylabel("Abnormal Finding")
+        plt.tight_layout()
+        st.pyplot(fig, use_container_width=True)
+
     st.divider()
-    st.header("Advanced Analytics")
 
-    tab1, tab2 = st.tabs(["Correlation Analysis", "Data Explorer"])
+    # --- 6. TABS FOR DEEPER, INTERACTIVE ANALYSIS ---
+    st.header("Drill-Down and Advanced Analysis")
+    tab1, tab2, tab3 = st.tabs(["Interactive Clinical Explorer", "Correlation Analysis", "Data Explorer"])
 
     with tab1:
-        st.subheader("Correlations Between Top Clinical Variables")
-        numeric_df = df.select_dtypes(include=np.number)
-        correlation_matrix = numeric_df.corr()
+        st.subheader("Compare Clinical Indicators by CKD Status")
+        col_select, col_plot = st.columns([1, 2])
+        
+        with col_select:
+            lab_options = {
+                "Serum Creatinine": "serum_creatinine",
+                "Hemoglobin": "hemoglobin",
+                "Blood Glucose": "blood_glucose_random",
+                "Blood Urea": "blood_urea",
+                "Sodium": "sodium",
+                "Potassium": "potassium"
+            }
+            selected_lab1 = st.selectbox("Choose Lab Value 1:", options=list(lab_options.keys()), index=0)
+            selected_lab2 = st.selectbox("Choose Lab Value 2:", options=list(lab_options.keys()), index=1)
+        
+        with col_plot:
+            fig, ax = plt.subplots(1, 2, figsize=(10, 4))
+            sns.boxplot(x='class', y=lab_options[selected_lab1], data=df, ax=ax[0], palette="coolwarm")
+            ax[0].set_title(f"{selected_lab1}", fontsize=12)
+            ax[0].set_xticklabels(['Non-CKD', 'CKD'])
+            ax[0].set_xlabel("")
+            ax[0].set_ylabel("")
 
-        # Filter for top correlated pairs
-        corr_pairs = correlation_matrix.unstack().reset_index()
-        corr_pairs.columns = ['Variable 1', 'Variable 2', 'Correlation']
-        corr_pairs = corr_pairs[corr_pairs['Variable 1'] != corr_pairs['Variable 2']]
-        corr_pairs['pair_key'] = corr_pairs.apply(lambda row: tuple(sorted((row['Variable 1'], row['Variable 2']))), axis=1)
-        corr_pairs = corr_pairs.drop_duplicates(subset='pair_key').drop(columns='pair_key')
-        corr_pairs['Abs_Correlation'] = corr_pairs['Correlation'].abs()
-        significant_pairs = corr_pairs.sort_values(by='Abs_Correlation', ascending=False).head(10)
+            sns.boxplot(x='class', y=lab_options[selected_lab2], data=df, ax=ax[1], palette="viridis")
+            ax[1].set_title(f"{selected_lab2}", fontsize=12)
+            ax[1].set_xticklabels(['Non-CKD', 'CKD'])
+            ax[1].set_xlabel("")
+            ax[1].set_ylabel("")
 
-        col_table, col_heatmap = st.columns([1, 2])
-
-        with col_table:
-            st.write("Top 10 Correlated Pairs:")
-            st.dataframe(significant_pairs[['Variable 1', 'Variable 2', 'Correlation']].style.background_gradient(cmap='coolwarm', axis=0, subset='Correlation'))
-
-        with col_heatmap:
-            top_vars = pd.unique(significant_pairs[['Variable 1', 'Variable 2']].values.ravel('K'))
-            top_corr_matrix = correlation_matrix.loc[top_vars, top_vars]
-
-            fig, ax = plt.subplots(figsize=(8, 6))
-            sns.heatmap(top_corr_matrix, annot=True, cmap='coolwarm', fmt=".2f", linewidths=0.5, square=True, ax=ax)
-            ax.set_title("Heatmap of Strongest Correlated Variables", fontsize=16)
+            plt.tight_layout()
             st.pyplot(fig)
 
     with tab2:
-        st.subheader("Explore the Cleaned Dataset")
+        st.subheader("Correlations Between Top Clinical Variables")
+        numeric_df = df.select_dtypes(include=np.number)
+        correlation_matrix = numeric_df.corr()
+        
+        corr_pairs = correlation_matrix.unstack().reset_index()
+        corr_pairs.columns = ['Var1', 'Var2', 'Corr']
+        corr_pairs = corr_pairs[corr_pairs['Var1'] != corr_pairs['Var2']]
+        corr_pairs['key'] = corr_pairs.apply(lambda r: tuple(sorted((r['Var1'], r['Var2']))), axis=1)
+        corr_pairs = corr_pairs.drop_duplicates(subset='key').drop(columns='key')
+        corr_pairs['Abs_Corr'] = corr_pairs['Corr'].abs()
+        sig_pairs = corr_pairs.sort_values(by='Abs_Corr', ascending=False).head(10)
+        
+        col_table, col_heatmap = st.columns([1, 2])
+        
+        with col_table:
+            st.write("Top 10 Correlated Pairs:")
+            st.dataframe(sig_pairs[['Var1', 'Var2', 'Corr']].style.background_gradient(cmap='coolwarm', axis=0, subset='Corr'))
+
+        with col_heatmap:
+            top_vars = pd.unique(sig_pairs[['Var1', 'Var2']].values.ravel('K'))
+            top_corr_matrix = correlation_matrix.loc[top_vars, top_vars]
+            
+            fig, ax = plt.subplots(figsize=(7, 5))
+            sns.heatmap(top_corr_matrix, annot=True, cmap='coolwarm', fmt=".2f", linewidths=0.5, square=True, ax=ax)
+            ax.set_title("Heatmap of Strongest Correlations", fontsize=14)
+            st.pyplot(fig, use_container_width=True)
+            
+    with tab3:
+        st.subheader("Explore the Full Cleaned Dataset")
         st.dataframe(df.drop(columns=['age_group']))
