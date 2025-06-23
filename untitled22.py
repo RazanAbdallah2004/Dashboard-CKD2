@@ -46,46 +46,40 @@ df = load_data()
 # --- 3. MAIN DASHBOARD ---
 if df is not None:
     st.title("🩺 Chronic Kidney Disease (CKD) Analytics Dashboard")
-    st.markdown("A high-level overview of key CKD metrics, risk factors, and clinical findings.")
-
+    
     # --- 4. KPIs & HIGH-LEVEL METRICS ---
-    st.header("Overall Snapshot")
+    st.subheader("Overall Snapshot")
     total_patients = len(df)
     ckd_patients = df['class'].sum()
     prevalence = (ckd_patients / total_patients) * 100
 
     col1, col2, col3 = st.columns(3)
-    col1.metric("Total Patients Analyzed", f"{total_patients}")
-    col2.metric("CKD Cases Identified", f"{ckd_patients}")
-    col3.metric("Overall CKD Prevalence", f"{prevalence:.1f}%")
-    st.divider()
+    col1.metric("Total Patients", f"{total_patients}")
+    col2.metric("CKD Cases", f"{ckd_patients}")
+    col3.metric("Overall Prevalence", f"{prevalence:.1f}%")
 
     # --- 5. HORIZONTAL LAYOUT FOR CORE VISUALIZATIONS ---
-    st.header("Key Healthcare Metrics at a Glance")
+    st.subheader("Key Healthcare Metrics at a Glance")
     colA, colB, colC = st.columns(3)
 
     # --- Prevalence by Age Group ---
     with colA:
-        st.subheader("CKD Prevalence by Age")
         age_prev = df.groupby('age_group')['class'].mean().mul(100)
-        # --- ADJUSTED FIGSIZE ---
-        fig, ax = plt.subplots(figsize=(5, 4)) 
+        # --- ADJUSTED FIGSIZE & FONTSIZE ---
+        fig, ax = plt.subplots(figsize=(4.5, 3.5)) 
         bars = sns.barplot(x=age_prev.index, y=age_prev.values, palette='Blues_d', ax=ax)
-        ax.set_ylabel('Prevalence (%)')
-        ax.set_xlabel('Age Group')
+        ax.set_title('Prevalence by Age', fontsize=12)
+        ax.set_ylabel('Prevalence (%)', fontsize=9)
+        ax.set_xlabel('Age Group', fontsize=9)
         ax.set_ylim(0, 100)
-        
-        # --- ANNOTATIONS WITH ADJUSTED FONTSIZE ---
         for bar in bars.patches:
             ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height(), f'{bar.get_height():.1f}%', 
-                    ha='center', va='bottom', fontsize=9, fontweight='bold')
-        
+                    ha='center', va='bottom', fontsize=8, fontweight='bold')
         plt.tight_layout()
         st.pyplot(fig, use_container_width=True)
 
     # --- Odds Ratios of Key Risk Factors ---
     with colB:
-        st.subheader("Key Comorbidity Risks")
         categorical_vars = ['hypertension', 'diabetes_mellitus', 'coronary_artery_disease', 'anemia']
         or_list = []
         for var in categorical_vars:
@@ -95,22 +89,19 @@ if df is not None:
             or_list.append({'Risk Factor': var.replace('_', ' ').title(), 'Odds Ratio': odds_ratio})
         
         odds_df = pd.DataFrame(or_list).set_index('Risk Factor').sort_values(by='Odds Ratio')
-        # --- ADJUSTED FIGSIZE ---
-        fig, ax = plt.subplots(figsize=(5, 4))
-        bars = sns.barplot(x=odds_df['Odds Ratio'], y=odds_df.index, palette='OrRd', ax=ax)
-        ax.set_xlabel("Odds Ratio (Log Scale)")
+        # --- ADJUSTED FIGSIZE & FONTSIZE ---
+        fig, ax = plt.subplots(figsize=(4.5, 3.5))
+        sns.barplot(x=odds_df['Odds Ratio'], y=odds_df.index, palette='OrRd', ax=ax)
+        ax.set_title('Comorbidity Risks', fontsize=12)
+        ax.set_xlabel("Odds Ratio (Log Scale)", fontsize=9)
         ax.set_ylabel("")
         ax.axvline(1, color='black', linestyle='--')
         ax.set_xscale('log')
-        # --- ANNOTATIONS WITH ADJUSTED FONTSIZE ---
-        for i, v in enumerate(odds_df['Odds Ratio']):
-            ax.text(v, i, f' {v:.2f}', va='center', ha='left', fontweight='bold', fontsize=9)
         plt.tight_layout()
         st.pyplot(fig, use_container_width=True)
 
     # --- Incidence of Abnormal Lab Findings ---
     with colC:
-        st.subheader("Incidence of Abnormal Findings")
         abnormal_defs = {
             'Albumin > 0': df['albumin'] > 0,
             'Pus Cells Abn.': df['pus_cell'] == 0,
@@ -122,85 +113,54 @@ if df is not None:
             incidence_data.append([cond[df['class']==0].mean()*100, cond[df['class']==1].mean()*100])
         
         incidence_df = pd.DataFrame(incidence_data, index=abnormal_defs.keys(), columns=['Non-CKD', 'CKD'])
-        # --- ADJUSTED FIGSIZE ---
-        fig, ax = plt.subplots(figsize=(5, 4))
-        sns.heatmap(incidence_df, annot=True, fmt=".1f", cmap='coolwarm', linewidths=0.5, ax=ax, cbar=False, annot_kws={"size": 10})
-        ax.set_ylabel("Abnormal Finding")
+        # --- ADJUSTED FIGSIZE & FONTSIZE ---
+        fig, ax = plt.subplots(figsize=(4.5, 3.5))
+        sns.heatmap(incidence_df, annot=True, fmt=".1f", cmap='coolwarm', linewidths=0.5, ax=ax, cbar=False, annot_kws={"size": 9})
+        ax.set_title('Abnormal Findings Incidence', fontsize=12)
+        ax.set_ylabel("")
         plt.tight_layout()
         st.pyplot(fig, use_container_width=True)
 
-    st.divider()
-
     # --- 6. TABS FOR DEEPER, INTERACTIVE ANALYSIS ---
-    st.header("Drill-Down and Advanced Analysis")
+    st.subheader("Drill-Down and Advanced Analysis")
     tab1, tab2, tab3 = st.tabs(["Interactive Clinical Explorer", "Correlation Analysis", "Data Explorer"])
 
     with tab1:
-        st.subheader("Compare Clinical Indicators by CKD Status")
         col_select, col_plot = st.columns([1, 2])
-        
         with col_select:
-            lab_options = {
-                "Serum Creatinine": "serum_creatinine",
-                "Hemoglobin": "hemoglobin",
-                "Blood Glucose": "blood_glucose_random",
-                "Blood Urea": "blood_urea",
-                "Sodium": "sodium",
-                "Potassium": "potassium"
-            }
-            selected_lab1 = st.selectbox("Choose Lab Value 1:", options=list(lab_options.keys()), index=0)
-            selected_lab2 = st.selectbox("Choose Lab Value 2:", options=list(lab_options.keys()), index=1)
-        
+            lab_options = { "Serum Creatinine": "serum_creatinine", "Hemoglobin": "hemoglobin", "Blood Glucose": "blood_glucose_random",
+                            "Blood Urea": "blood_urea", "Sodium": "sodium", "Potassium": "potassium" }
+            selected_lab1 = st.selectbox("Lab Value 1:", list(lab_options.keys()), index=0)
+            selected_lab2 = st.selectbox("Lab Value 2:", list(lab_options.keys()), index=1)
         with col_plot:
-            fig, ax = plt.subplots(1, 2, figsize=(10, 4))
+            fig, ax = plt.subplots(1, 2, figsize=(10, 3.5))
             sns.boxplot(x='class', y=lab_options[selected_lab1], data=df, ax=ax[0], palette="coolwarm")
-            ax[0].set_title(f"{selected_lab1}", fontsize=12)
-            ax[0].set_xticklabels(['Non-CKD', 'CKD'])
-            ax[0].set_xlabel("")
-            ax[0].set_ylabel("")
-
+            ax[0].set_title(f"{selected_lab1}", fontsize=11); ax[0].set_xticklabels(['Non-CKD', 'CKD']); ax[0].set_xlabel(""); ax[0].set_ylabel("")
             sns.boxplot(x='class', y=lab_options[selected_lab2], data=df, ax=ax[1], palette="viridis")
-            ax[1].set_title(f"{selected_lab2}", fontsize=12)
-            ax[1].set_xticklabels(['Non-CKD', 'CKD'])
-            ax[1].set_xlabel("")
-            ax[1].set_ylabel("")
-
-            plt.tight_layout()
-            st.pyplot(fig)
+            ax[1].set_title(f"{selected_lab2}", fontsize=11); ax[1].set_xticklabels(['Non-CKD', 'CKD']); ax[1].set_xlabel(""); ax[1].set_ylabel("")
+            plt.tight_layout(); st.pyplot(fig)
 
     with tab2:
-        st.subheader("Correlations Between Top Clinical Variables")
-        # --- Create and filter the correlation DataFrame ---
         numeric_df = df.select_dtypes(include=np.number)
         correlation_matrix = numeric_df.corr()
-        corr_pairs = correlation_matrix.unstack().reset_index()
-        corr_pairs.columns = ['Variable 1', 'Variable 2', 'Correlation']
-        corr_pairs = corr_pairs[corr_pairs['Variable 1'] != corr_pairs['Variable 2']]
-        corr_pairs['pair_key'] = corr_pairs.apply(lambda row: tuple(sorted((row['Variable 1'], row['Variable 2']))), axis=1)
-        corr_pairs = corr_pairs.drop_duplicates(subset='pair_key').drop(columns='pair_key')
-        corr_pairs['Abs_Correlation'] = corr_pairs['Correlation'].abs()
-        significant_pairs = corr_pairs.sort_values(by='Abs_Correlation', ascending=False).head(10)
-
-        # --- Display the table and focused heatmap ---
-        col_table, col_heatmap = st.columns([1, 2])
+        corr_pairs = correlation_matrix.unstack().reset_index(); corr_pairs.columns = ['Var1', 'Var2', 'Corr']
+        corr_pairs = corr_pairs[corr_pairs['Var1'] != corr_pairs['Var2']]
+        corr_pairs['key'] = corr_pairs.apply(lambda r: tuple(sorted((r['Var1'], r['Var2']))), axis=1)
+        corr_pairs = corr_pairs.drop_duplicates(subset='key').drop(columns='key')
+        corr_pairs['Abs_Corr'] = corr_pairs['Corr'].abs()
+        sig_pairs = corr_pairs.sort_values(by='Abs_Corr', ascending=False).head(10)
         
+        col_table, col_heatmap = st.columns([1, 2])
         with col_table:
             st.write("Top 10 Correlated Pairs:")
-            st.dataframe(significant_pairs[['Variable 1', 'Variable 2', 'Correlation']].style.background_gradient(cmap='coolwarm', axis=0, subset='Correlation'))
-
+            st.dataframe(sig_pairs[['Var1', 'Var2', 'Corr']].style.background_gradient(cmap='coolwarm', axis=0, subset='Corr'))
         with col_heatmap:
-            # Extract variables and create the matrix for the heatmap
-            top_vars = pd.unique(significant_pairs[['Variable 1', 'Variable 2']].values.ravel('K'))
+            top_vars = pd.unique(sig_pairs[['Var1', 'Var2']].values.ravel('K'))
             top_corr_matrix = correlation_matrix.loc[top_vars, top_vars]
-            
-            # Create a mask to hide the redundant upper triangle
             mask = np.triu(np.ones_like(top_corr_matrix, dtype=bool))
-            
-            # Plot the heatmap
-            fig_corr, ax_corr = plt.subplots(figsize=(8, 6))
-            sns.heatmap(top_corr_matrix, annot=True, cmap='coolwarm', fmt=".2f", linewidths=0.5, 
-                        mask=mask, ax=ax_corr)
-            ax_corr.set_title("Heatmap of Strongest Correlations", fontsize=14)
+            fig_corr, ax_corr = plt.subplots(figsize=(7, 5))
+            sns.heatmap(top_corr_matrix, annot=True, cmap='coolwarm', fmt=".2f", linewidths=0.5, mask=mask, ax=ax_corr)
+            ax_corr.set_title("Heatmap of Strongest Correlations", fontsize=12)
             st.pyplot(fig_corr, use_container_width=True)
             
     with tab3:
